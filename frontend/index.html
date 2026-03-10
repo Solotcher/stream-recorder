@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Recorder UI</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <span class="logo-icon">🔴</span>
+                <h2>StreamRecorder</h2>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item active" onclick="switchView('active')">
+                    <span class="nav-icon">⚡</span>
+                    <span>현재 녹화 현황</span>
+                </li>
+                <li class="nav-item" onclick="switchView('manual')">
+                    <span class="nav-icon">▶</span>
+                    <span>수동 즉시 녹화</span>
+                </li>
+                <li class="nav-item" onclick="switchView('scheduled')">
+                    <span class="nav-icon">📅</span>
+                    <span>예약 (모니터링)</span>
+                </li>
+            </ul>
+            <div class="sidebar-bottom">
+                <button class="btn btn-outline" style="width: 100%;" onclick="openConfigModal()">⚙️ 설정 (쿠키/시스템)</button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- View 1: Manual Record (수동 즉시 녹화) -->
+            <div id="view-manual" class="view-content active">
+                <header class="view-header">
+                    <h1>수동 즉시 녹화</h1>
+                    <p class="subtitle">방송국 URL을 입력하고 즉각적으로 강제 녹화를 시작합니다.</p>
+                </header>
+
+                <div class="glass-card">
+                    <div class="quick-action-bar"
+                        style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                        <input type="text" id="manual_url_input"
+                            placeholder="방송 채널 URL (예: https://chzzk.naver.com/live/xxx)"
+                            style="flex: 1; min-width: 300px;">
+                        <select id="manual_platform" style="width: 150px;">
+                            <option value="auto">자동 탐지</option>
+                            <option value="chzzk">치지직</option>
+                            <option value="soop">숲(SOOP)</option>
+                            <option value="twitch">트위치</option>
+                        </select>
+                        <input type="password" id="manual_stream_password" placeholder="비밀번호 방인 경우 입력 (선택)" style="flex: 1; min-width: 200px; padding: 0.75rem; border-radius: 6px; background: rgba(1, 4, 9, 0.8); border: 1px solid var(--glass-border); color: var(--text-primary);">
+                        <button class="btn btn-primary" onclick="submitManualRecord()">🔴 지금
+                            녹화 시작</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 2: Scheduled (예약 모니터링) -->
+            <div id="view-scheduled" class="view-content">
+                <header class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1>예약 (모니터링 리스트)</h1>
+                        <p class="subtitle">자동으로 생방송을 감지하여 녹화를 시작할 채널 목록입니다.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openAddModal()">+ 채널
+                        추가</button>
+                </header>
+
+                <div class="glass-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>플랫폼</th>
+                                    <th>채널 명</th>
+                                    <th>현재 상태</th>
+                                    <th>설정 관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="channelTbody">
+                                <!-- JS Render -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 3: Active Jobs (현재 진행 상황) -->
+            <div id="view-active" class="view-content">
+                <header class="view-header">
+                    <h1>현재 녹화 현황</h1>
+                    <p class="subtitle">시스템 내에서 FFmpeg 백그라운드 작업이 돌아가고 있는 라이브 현황입니다.</p>
+                </header>
+
+                <div class="glass-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>플랫폼 / 이름</th>
+                                    <th>저장 파일 경로</th>
+                                    <th>진행 시간</th>
+                                    <th>작업 제어</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activeJobsTbody">
+                                <!-- JS 폴링 (나중에 구현) -->
+                                <tr>
+                                    <td colspan="4"
+                                        style="text-align:center; padding: 20px; color:var(--text-secondary);">
+                                        진행 중인 녹화 작업이 없습니다.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 모달: 채널 추가 -->
+    <div id="addModal" class="modal-overlay">
+        <div class="modal-content glass-card">
+            <h3>예약 채널 등록</h3>
+            <div class="input-group">
+                <label>플랫폼 선택 (URL 적용시 자동 파싱됨)</label>
+                <select id="modal_platform">
+                    <option value="auto">자동 탐지 (Auto)</option>
+                    <option value="chzzk">치지직 (Chzzk)</option>
+                    <option value="soop">숲 (SOOP)</option>
+                    <option value="twitch">트위치 (Twitch)</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>채널 URL 고유 ID</label>
+                <input type="text" id="modal_channel_id" placeholder="링크 붙여넣기...">
+            </div>
+            <div class="input-group">
+                <label>개인 식별 채널명 (선택, 비워두면 공식 이름 자동 파싱)</label>
+                <input type="text" id="modal_channel_name" placeholder="스트리머의 이름 입력 (미입력 권장)">
+            </div>
+            <div class="input-group">
+                <label>기본 녹화 해상도 (화질 설정)</label>
+                <select id="modal_resolution">
+                    <option value="best">최고 화질 (자동)</option>
+                    <option value="1080p60">1080P60</option>
+                    <option value="1080p">1080P30</option>
+                    <option value="720p60">720P60</option>
+                    <option value="720p">720P30</option>
+                    <option value="480p">480P</option>
+                    <option value="worst">최저 화질</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" style="flex:1" onclick="submitChannel()">추가</button>
+                <button class="btn" style="flex:1; border-color: rgba(255,255,255,0.2)"
+                    onclick="closeAddModal()">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달: 쿠키/설정 관리 -->
+    <div id="configModal" class="modal-overlay">
+        <div class="modal-content glass-card" style="max-width: 600px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>⚙️ 통합 환경 설정</h3>
+                <button class="btn" onclick="closeConfigModal()"
+                    style="padding: 4px 8px; border:none; background:transparent; font-size:1.2rem;">✖</button>
+            </div>
+
+            <div class="tabs" style="display:flex; margin-bottom: 20px; border-bottom: 1px solid var(--glass-border);">
+                <button class="btn btn-sm config-main-tab active" onclick="switchMainTab('cookie')">🍪 플랫폼 쿠키</button>
+                <button class="btn btn-sm config-main-tab" onclick="switchMainTab('system')">🛠 시스템/알림 설정</button>
+            </div>
+
+            <!-- 쿠키 탭 내용 -->
+            <div id="tab-content-cookie" class="config-tab-content active">
+                <p style="margin-bottom: 20px; color:var(--text-secondary); font-size: 0.9em;">
+                    EditThisCookie 확장 프로그램에서 복사한 Netscape 형식(`.txt`)이나 JSON 형식을 통째로 붙여넣어 주시면
+                    서버가 스마트하게 파싱합니다.
+                </p>
+                <div class="tabs" style="display:flex; margin-bottom: 10px; gap: 5px;">
+                    <button class="btn btn-sm cookie-sub-tab active" onclick="switchCookieTab('chzzk')">치지직 <span id="cookie_dot_chzzk" style="font-size:8px;">●</span></button>
+                    <button class="btn btn-sm cookie-sub-tab" onclick="switchCookieTab('twitch')">트위치 <span id="cookie_dot_twitch" style="font-size:8px;">●</span></button>
+                    <button class="btn btn-sm cookie-sub-tab" onclick="switchCookieTab('soop')">숲(SOOP) <span id="cookie_dot_soop" style="font-size:8px;">●</span></button>
+                </div>
+
+                <div id="cookie_status_bar" style="padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.85em; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);">
+                    쿠키 상태를 불러오는 중...
+                </div>
+
+                <div class="input-group">
+                    <label id="cookie_label">치지직(Chzzk) 통합 쿠키 뭉치 입력</label>
+                    <textarea id="cookie_textarea" rows="8" placeholder="클립보드 내용을 붙여넣으세요..."></textarea>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" style="flex:1" onclick="saveCookieParser()">쿠키 파싱 및 저장</button>
+                </div>
+            </div>
+
+            <!-- 시스템 탭 내용 -->
+            <div id="tab-content-system" class="config-tab-content" style="display:none;">
+                <div class="input-group">
+                    <label>Telegram Bot Token (알림용)</label>
+                    <input type="text" id="sys_tg_token" placeholder="bot123456:ABCDE...">
+                </div>
+                <div class="input-group" style="margin-top:10px;">
+                    <label>Telegram Chat ID</label>
+                    <input type="text" id="sys_tg_chat_id" placeholder="123456789">
+                    <small style="color:var(--text-secondary); display:block; margin-top:5px;">
+                        텔레그램에서 GetIdBot 등을 통해 본인의 Chat ID를 구하여 입력해두면 에러나 녹화 완료 알림이 발송됩니다.
+                    </small>
+                </div>
+
+                <div class="input-group" style="margin-top:10px;">
+                    <label>Base 저장 위치 (입력 없을 시 기본 Output 폴더 사용)</label>
+                    <input type="text" id="sys_output_dir" placeholder="예: C:\StreamRecords 또는 /volume1/records">
+                    <small style="color:var(--text-secondary); display:block; margin-top:5px;">
+                        해당 폴더 내부로 스트리머 이름의 폴더가 자동으로 나뉘며 생성됩니다.
+                    </small>
+                </div>
+
+                <div class="input-group" style="margin-top:10px;">
+                    <label>Rclone 클라우드 원격지 (입력 시 자동 업로드 활성화)</label>
+                    <input type="text" id="sys_rclone_remote" placeholder="예: gdrive:/Backups (작업명:경로 형식)">
+                    <small style="color:var(--text-secondary); display:block; margin-top:5px;">
+                        시스템에 Rclone 명령어가 설치되어 있어야 하며 저장된 Remote 프로파일을 사용합니다. 녹화(및 병합)가 안전하게 완료되면 백그라운드로 업로드 파이프라인이 실행됩니다.
+                    </small>
+                </div>
+
+                <div class="input-group" style="margin-top:10px;">
+                    <label>파일명 패턴</label>
+                    <input type="text" id="sys_filename_pattern" placeholder="{date}_{streamer}_{title}_{quality}">
+                    <small style="color:var(--text-secondary); display:block; margin-top:5px;">
+                        사용 가능 변수: <code>{date}</code> (YYYYMMDD), <code>{streamer}</code> (스트리머명), <code>{title}</code> (방송제목), <code>{quality}</code> (화질), <code>{platform}</code> (플랫폼)
+                    </small>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" style="flex:1" onclick="saveSystemConfig()">시스템 설정 저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 알림 컨테이너 -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>

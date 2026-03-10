@@ -1,0 +1,40 @@
+# 가상환경
+.venv/
+venv/
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# 환경 설정 (시크릿)
+.env
+
+# 런타임 데이터
+data/
+output/
+bin/
+logs/
+active_pids.json
+
+# IDE / 에디터
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 테스트 / 임시
+.pytest_cache/
+.testsprite/
+testsprite_tests/
+tests/
+.tmp/
+.gemini/
+.agents/
+
+# 작업 기록 (개발용)
+work_log.md
+next_session_guide.md
+
+# Windows 전용
+*.bat
