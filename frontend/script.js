@@ -17,74 +17,46 @@ import {
 } from './api.js';
 import { initWebSocket } from './ws.js';
 
-// --- 전역 함수 바인딩 (하위 호환성 유지) ---
-window.switchView = switchView;
-window.openModal = openModal;
-window.closeModal = closeModal;
-window.startChannel = startChannel;
-window.stopChannel = stopChannel;
-window.deleteChannel = deleteChannel;
-window.submitChannel = submitChannel;
-window.submitManualRecord = submitManualRecord;
-window.switchMainTab = (tabName, e) => switchMainTab(tabName, e);
-window.switchCookieTab = switchCookieTab;
-window.openConfigModal = openConfigModalWithData;
-window.saveCookieParser = saveCookieParser;
-window.saveSystemConfig = saveSystemConfig;
-
-// --- 동적 이벤트 리스너 등록 (신규 방식) ---
+// --- 동적 이벤트 리스너 등록 (신규 Event Delegation 방식) ---
 function bindEvents() {
-    console.log('[App] 이벤트 리스너 바인딩 중...');
+    console.log('[App] 전역 이벤트 위임 리스너 바인딩 중...');
     
-    // 1. 사이드바 네비게이션
-    document.querySelectorAll('.nav-item[data-view]').forEach(item => {
-        item.addEventListener('click', () => {
-            const viewId = item.getAttribute('data-view');
-            switchView(viewId);
-        });
+    document.addEventListener('click', (e) => {
+        // 1. 사이드바 네비게이션
+        const navItem = e.target.closest('.nav-item[data-view]');
+        if (navItem) return switchView(navItem.dataset.view);
+
+        // 2. 모달 열기/닫기
+        if (e.target.closest('#btn_open_config')) return openConfigModalWithData();
+        if (e.target.closest('#btn_close_config_modal')) return closeModal('configModal');
+        if (e.target.closest('#btn_open_add_modal')) return openModal('addModal');
+        if (e.target.closest('#btn_close_add_modal')) return closeModal('addModal');
+
+        // 3. 설정 탭 전환
+        const mainTab = e.target.closest('.config-main-tab[data-tab]');
+        if (mainTab) return switchMainTab(mainTab.dataset.tab, {currentTarget: mainTab});
+
+        const cookieTab = e.target.closest('.cookie-sub-tab[data-cookie-platform]');
+        if (cookieTab) return switchCookieTab(cookieTab.dataset.cookiePlatform);
+
+        // 4. 주요 액션 버튼
+        if (e.target.closest('#btn_manual_record')) return submitManualRecord();
+        if (e.target.closest('#btn_submit_channel')) return submitChannel();
+        if (e.target.closest('#btn_save_cookie')) return saveCookieParser();
+        if (e.target.closest('#btn_save_system_config')) return saveSystemConfig();
+
+        // 5. 동적 렌더링된 채널 목록 버튼 (api.js에서 주입)
+        const startBtn = e.target.closest('[data-action="start-channel"]');
+        if (startBtn) return startChannel(startBtn.dataset.id);
+
+        const stopBtn = e.target.closest('[data-action="stop-channel"]');
+        if (stopBtn) return stopChannel(stopBtn.dataset.id);
+
+        const deleteBtn = e.target.closest('[data-action="delete-channel"]');
+        if (deleteBtn) return deleteChannel(deleteBtn.dataset.id);
     });
-
-    // 2. 모달 열기/닫기 버튼
-    const btnOpenConfig = document.getElementById('btn_open_config');
-    if (btnOpenConfig) btnOpenConfig.onclick = openConfigModalWithData; // api.js의 복합 로직
-
-    const btnCloseConfig = document.getElementById('btn_close_config_modal');
-    if (btnCloseConfig) btnCloseConfig.onclick = () => closeModal('configModal');
-
-    const btnOpenAdd = document.getElementById('btn_open_add_modal');
-    if (btnOpenAdd) btnOpenAdd.onclick = () => openModal('addModal');
-
-    const btnCloseAdd = document.getElementById('btn_close_add_modal');
-    if (btnCloseAdd) btnCloseAdd.onclick = () => closeModal('addModal');
-
-    // 3. 설정 모달 내 탭 전환
-    document.querySelectorAll('.config-main-tab[data-tab]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tabName = btn.getAttribute('data-tab');
-            switchMainTab(tabName, e);
-        });
-    });
-
-    document.querySelectorAll('.cookie-sub-tab[data-cookie-platform]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const platform = btn.getAttribute('data-cookie-platform');
-            switchCookieTab(platform);
-        });
-    });
-
-    // 4. 주요 액션 버튼
-    if (document.getElementById('btn_manual_record')) 
-        document.getElementById('btn_manual_record').onclick = submitManualRecord;
-
-    if (document.getElementById('btn_submit_channel')) 
-        document.getElementById('btn_submit_channel').onclick = submitChannel;
-
-    if (document.getElementById('btn_save_cookie')) 
-        document.getElementById('btn_save_cookie').onclick = saveCookieParser;
-
-    if (document.getElementById('btn_save_system_config')) 
-        document.getElementById('btn_save_system_config').onclick = saveSystemConfig;
 }
+
 
 // --- 앱 초기화 실행 ---
 const initApp = async () => {

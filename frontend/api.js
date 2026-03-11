@@ -44,14 +44,14 @@ export async function fetchChannels() {
             }
 
             let actionButtons = `
-                <button class="btn" style="color:var(--accent); border-color:var(--accent); margin-right:4px;" onclick="window.startChannel('${ch.id}')">▶ 녹화</button>
-                <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5);" onclick="window.deleteChannel('${ch.id}')">삭제</button>
+                <button class="btn" style="color:var(--accent); border-color:var(--accent); margin-right:4px;" data-action="start-channel" data-id="${ch.id}">▶ 녹화</button>
+                <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5);" data-action="delete-channel" data-id="${ch.id}">삭제</button>
             `;
 
             if (ch.is_recording) {
                 actionButtons = `
-                    <button class="btn" style="color:var(--text-secondary); border-color:var(--glass-border); margin-right:4px;" onclick="window.stopChannel('${ch.id}')">■ 중지</button>
-                    <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5);" onclick="window.deleteChannel('${ch.id}')">삭제</button>
+                    <button class="btn" style="color:var(--text-secondary); border-color:var(--glass-border); margin-right:4px;" data-action="stop-channel" data-id="${ch.id}">■ 중지</button>
+                    <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5);" data-action="delete-channel" data-id="${ch.id}">삭제</button>
                 `;
             }
 
@@ -109,7 +109,7 @@ export async function fetchActiveJobs() {
                 <td>
                     <span style="color:#7ee787;">녹화 중 🔴</span>
                     <span style="color:var(--text-secondary); font-size:0.85em; margin-left:6px;">${elapsed}</span>
-                    <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5); margin-left:8px; padding:3px 8px; font-size:0.8em;" onclick="window.stopChannel('${escapeHtml(ch.id)}')">■ 중지</button>
+                    <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5); margin-left:8px; padding:3px 8px; font-size:0.8em;" data-action="stop-channel" data-id="${ch.id}">■ 중지</button>
                 </td>
             `;
             tbody.appendChild(tr);
