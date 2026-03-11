@@ -1,6 +1,17 @@
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
+import aiohttp
 from app.core.logger import logger
+
+_global_session: Optional[aiohttp.ClientSession] = None
+
+async def get_shared_session() -> aiohttp.ClientSession:
+    global _global_session
+    if _global_session is None or _global_session.closed:
+        connector = aiohttp.TCPConnector(limit=50, keepalive_timeout=60)
+        _global_session = aiohttp.ClientSession(connector=connector)
+    return _global_session
 
 class BaseExtractor(ABC):
     """
@@ -51,22 +62,27 @@ class BaseExtractor(ABC):
 
     async def _fetch_json(self, url: str, method: str = "GET", headers: dict = None, data=None, json_body=None, timeout: int = 10) -> dict:
         """
-        공통 HTTP JSON 요청 유틸리티. 자식 클래스에서 aiohttp 세션 생성/에러 처리 중복을 줄여줍니다.
+        공통 HTTP JSON 요청 유틸리티. 전역 세션을 재사용하여 오버헤드를 낮추고, Request Timeout을 제한합니다.
         """
-        import aiohttp
         req_headers = headers or self.headers.copy()
+        
+        # 각 요청 단위 타임아웃 설정
+        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        
         try:
-            async with aiohttp.ClientSession(headers=req_headers) as session:
-                if method.upper() == "POST":
-                    async with session.post(url, data=data, json=json_body, timeout=timeout) as response:
-                        if response.status == 200:
-                            return await response.json()
-                        logger.warning(f"HTTP {response.status} from {url}")
-                else:
-                    async with session.get(url, timeout=timeout) as response:
-                        if response.status == 200:
-                            return await response.json()
-                        logger.warning(f"HTTP {response.status} from {url}")
+            session = await get_shared_session()
+            if method.upper() == "POST":
+                async with session.post(url, headers=req_headers, data=data, json=json_body, timeout=client_timeout) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    logger.warning(f"HTTP {response.status} from {url}")
+            else:
+                async with session.get(url, headers=req_headers, timeout=client_timeout) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    logger.warning(f"HTTP {response.status} from {url}")
+        except asyncio.TimeoutError:
+            logger.error(f"HTTP 통신 타임아웃 발생 ({url}) - {timeout}초 초과")
         except Exception as e:
             logger.error(f"HTTP 통신 실패 ({url}): {e}")
         return {}

@@ -23,6 +23,24 @@ def resolve_ffmpeg_path() -> str:
     found = shutil.which(configured)
     return found or configured
 
+async def _run_ffmpeg_async(cmd: list) -> tuple[int, str]:
+    """
+    비동기적으로 FFmpeg 서브프로세스를 실행하고 returncode와 stderr_text를 반환하는 공통 헬퍼입니다.
+    """
+    import subprocess
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE
+    )
+    def _wait_proc():
+        _, stderr_output = proc.communicate()
+        return proc.returncode, stderr_output
+        
+    returncode, stderr_bytes = await asyncio.to_thread(_wait_proc)
+    stderr_text = stderr_bytes.decode("utf-8", errors="replace")[-2000:] if stderr_bytes else ""
+    return returncode, stderr_text
+
 async def process_remuxing(input_path: str, channel_name: str):
     """
     녹화된 .ts 파일을 .mp4로 리먹싱(스트림 복사)합니다.
@@ -52,20 +70,7 @@ async def process_remuxing(input_path: str, channel_name: str):
     ]
 
     try:
-        import subprocess
-        
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE
-        )
-        
-        def _wait_proc():
-            _, stderr_output = proc.communicate()
-            return proc.returncode, stderr_output
-            
-        returncode, stderr_bytes = await asyncio.to_thread(_wait_proc)
-        stderr_text = stderr_bytes.decode("utf-8", errors="replace")[-2000:] if stderr_bytes else ""
+        returncode, stderr_text = await _run_ffmpeg_async(cmd)
 
         if returncode == 0:
             # 무결성 검증: 출력 파일이 최소 1KB 이상인지 확인
@@ -161,19 +166,7 @@ async def process_soop_concat(chunks_dir: str, base_filename: str, channel_name:
             final_output
         ]
         
-        import subprocess
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE
-        )
-        
-        def _wait_proc():
-            _, stderr_output = proc.communicate()
-            return proc.returncode, stderr_output
-            
-        returncode, stderr_bytes = await asyncio.to_thread(_wait_proc)
-        stderr_text = stderr_bytes.decode("utf-8", errors="replace")[-2000:] if stderr_bytes else ""
+        returncode, stderr_text = await _run_ffmpeg_async(cmd)
         
         if returncode == 0:
             # 무결성 검증: 출력 파일이 최소 1KB 이상인지 확인

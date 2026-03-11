@@ -16,6 +16,7 @@
 - **웹 UI 제공**: 브라우저에서 간편하게 스트리머 추가, 쿠키 관리, 설정 변경이 가능합니다.
 - **안정적인 프로세스 관리**: 서버 재시작 시에도 기존 녹화 중인 프로세스를 자동으로 감지하여 연결을 유지합니다.
 - **클라우드 자동 업로드**: rclone 연동으로 녹화 완료 후 구글 드라이브 등 클라우드에 자동 백업.
+- **아키텍처 모듈화 및 안정성 보장**: 통합 예외 처리(Global Exception Handler), Trace ID 기반 추적, 그리고 데이터베이스 Lock 등 안정적이고 견고한 엔터프라이즈 환경 구조(SRP, DRY)가 적용되었습니다.
 
 ---
 
@@ -78,10 +79,28 @@ chmod +x start.sh
 ## 기술 스택
 
 - **Backend**: FastAPI (Python)
-- **Frontend**: Vanilla JS, CSS (Glassmorphism UI)
+- **Frontend**: Vanilla JS (ES Modules), CSS (Glassmorphism UI)
 - **녹화 엔진**: Streamlink (치지직/트위치/숲), yt-dlp (유튜브)
 - **후처리**: FFmpeg (Remuxing / Concat)
+- **테스트 및 검증**: Pytest, TestClient, TestSprite 연동
 - **Dependency**: `psutil`, `aiohttp`, `apscheduler` 등
+
+---
+
+## 🧪 자동화 테스트 (Testing)
+
+이 프로젝트는 `pytest` 프레임워크와 FastAPI의 `TestClient`를 기반으로 백엔드 API에 대한 단위 및 통합 테스트 환경을 제공합니다. 
+또한 AI 테스트 생성 서비스인 `TestSprite` 와 호환되도록 구성되었습니다.
+
+```bash
+# 전체 테스트 실행
+python -m pytest tests/ -v
+
+# 또는 특정 파일만 테스트
+python -m pytest tests/test_api.py -v
+```
+
+테스트를 실행하면, 인증 로직(`X-API-Key`) 및 `Trace ID` 미들웨어, 유효하지 않은 엔드포인트(404) 처리 등 코어 기능의 안정성을 검증합니다.
 
 ---
 

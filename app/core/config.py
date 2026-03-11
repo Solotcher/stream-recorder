@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     APP_NAME: str = "Stream Recorder Server"
     VERSION: str = "v2.0"
-    DEBUG: bool = True
+    DEBUG: bool = False
     
     # 디렉토리 설정
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

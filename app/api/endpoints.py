@@ -173,16 +173,8 @@ async def get_active_records():
             })
     return {"status": "success", "data": active_jobs}
 
-@router.post("/records/manual/start")
-async def start_manual_record(request: ManualRecordRequest):
-    """ 수동 전용 녹화 시작 (DB 등록 거치지 않음) """
-    platform = request.platform
-    channel_id = request.id
-    
-    # URL 찌꺼기 방어
-    if '/' in channel_id:
-        channel_id = channel_id.split('/')[0]
-
+async def _initiate_recording(channel_id: str, platform: str, ch_name: str, resolution: str, record_type: str, stream_password: Optional[str] = None):
+    # 공통 서비스 함수: FFmpeg 녹화 트리거
     recorder = RecorderManager.get_instance(channel_id)
     if recorder.is_recording:
         return {"status": "success", "message": "이미 녹화 중입니다."}
@@ -194,25 +186,48 @@ async def start_manual_record(request: ManualRecordRequest):
     cookies = get_platform_cookies(platform)
     extractor = ExtClass(channel_id=channel_id, cookies=cookies)
     
-    if getattr(request, "stream_password", None):
-        extractor.stream_password = request.stream_password
+    if stream_password:
+        extractor.stream_password = stream_password
         
     try:
         is_live = await extractor.is_live()
         if is_live:
             meta = await extractor.get_metadata()
-            ch_name = meta.get("channel_name", channel_id)
-                
-            await trigger_recording(channel_id, platform, ch_name, extractor, recorder, meta, record_type="manual", resolution=request.resolution)
-            await broadcast_event("recording_started", {"id": channel_id, "platform": platform, "name": ch_name, "record_type": "manual"})
-            return {"status": "success", "message": "수동 녹화 시작됨"}
+            final_ch_name = meta.get("channel_name", ch_name)
+            await trigger_recording(
+                channel_id, platform, final_ch_name, extractor, recorder, meta, record_type=record_type, resolution=resolution
+            )
+            
+            # 수동 시작인 경우에는 별도 이벤트 브로드캐스트
+            if record_type == "manual":
+                await broadcast_event("recording_started", {"id": channel_id, "platform": platform, "name": final_ch_name, "record_type": "manual"})
+            
+            return {"status": "success", "message": f"{'수동' if record_type == 'manual' else '강제'} 녹화 시작됨"}
         else:
             raise HTTPException(status_code=400, detail="방송이 오프라인 상태이거나 정보를 가져올 수 없습니다.")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"수동 녹화 처리 중 에러: {e}")
+        logger.error(f"녹화 처리 중 에러: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/records/manual/start")
+async def start_manual_record(request: ManualRecordRequest):
+    """ 수동 전용 녹화 시작 (DB 등록 거치지 않음) """
+    channel_id = request.id
+    if '/' in channel_id:
+        channel_id = channel_id.split('/')[0]
+
+    return await _initiate_recording(
+        channel_id=channel_id,
+        platform=request.platform,
+        ch_name=request.name,
+        resolution=request.resolution or "best",
+        record_type="manual",
+        stream_password=getattr(request, "stream_password", None)
+    )
 
 @router.post("/channel/{channel_id}/start")
 async def start_recording_scheduled_manual(channel_id: str):
@@ -222,33 +237,13 @@ async def start_recording_scheduled_manual(channel_id: str):
     if not ch:
         raise HTTPException(status_code=404, detail="Channel not found")
         
-    recorder = RecorderManager.get_instance(channel_id)
-    if recorder.is_recording:
-        return {"status": "success", "message": "이미 녹화 중입니다."}
-        
-    platform = ch.get("platform")
-    ExtClass = EXTRACTOR_MAP.get(platform)
-    if not ExtClass:
-        raise HTTPException(status_code=400, detail="Unsupported platform")
-        
-    cookies = get_platform_cookies(platform)
-    extractor = ExtClass(channel_id=channel_id, cookies=cookies)
-    
-    try:
-        is_live = await extractor.is_live()
-        if is_live:
-            meta = await extractor.get_metadata()
-            ch_name = ch.get("name", channel_id)
-            resolution = ch.get("resolution", "best")
-            await trigger_recording(channel_id, platform, ch_name, extractor, recorder, meta, record_type="scheduled", resolution=resolution)
-            return {"status": "success", "message": "강제 녹화 시작됨"}
-        else:
-            raise HTTPException(status_code=400, detail="방송이 오프라인 상태이거나 정보를 가져올 수 없습니다.")
-    except Exception as e:
-        logger.error(f"녹화 처리 중 에러: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _initiate_recording(
+        channel_id=channel_id,
+        platform=ch.get("platform"),
+        ch_name=ch.get("name", channel_id),
+        resolution=ch.get("resolution", "best"),
+        record_type="scheduled"
+    )
 
 @router.post("/channel/{channel_id}/stop")
 async def stop_recording_manual(channel_id: str):

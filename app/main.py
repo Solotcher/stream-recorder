@@ -10,6 +10,13 @@ from app.services.scheduler import init_scheduler, shutdown_scheduler
 import os
 import sys
 import asyncio
+import uuid
+import contextvars
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
+
+# 전역 컨텍스트 변수
+trace_id_ctx = contextvars.ContextVar("trace_id", default="unknown")
 
 # Windows 환경에서 subprocess (streamlink, ffmpeg) 비동기 실행 시 
 # NotImplementedError 가 발생하는 것을 막기 위해 ProactorEventLoop 강제 설정
@@ -62,16 +69,45 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Trace ID 미들웨어 추가
+    @app.middleware("http")
+    async def trace_id_middleware(request: Request, call_next):
+        req_trace_id = request.headers.get("X-Trace-Id", str(uuid.uuid4()))
+        token = trace_id_ctx.set(req_trace_id)
+        
+        response = await call_next(request)
+        response.headers["X-Trace-Id"] = req_trace_id
+        
+        trace_id_ctx.reset(token)
+        return response
+
     # API Key 인증 미들웨어 (설정에 API_KEY가 있을 때만 적용)
     @app.middleware("http")
     async def api_key_auth(request: Request, call_next):
         api_key = getattr(settings, "API_KEY", "")
-        # API Key가 미설정이면 인증 생략 (개발 모드)
         if api_key and request.url.path.startswith("/api"):
             req_key = request.headers.get("X-API-Key", "")
             if req_key != api_key:
-                return JSONResponse(status_code=401, content={"detail": "Invalid or missing API Key"})
+                return JSONResponse(status_code=401, content={
+                    "code": "AUTH_REQUIRED",
+                    "message": "Invalid or missing API Key",
+                    "traceId": trace_id_ctx.get()
+                })
         return await call_next(request)
+
+    # 범용 글로벌 예외 핸들러 등록
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        err_msg = str(exc)
+        logger.error(f"[Trace: {trace_id_ctx.get()}] 전역 예외 발생: {err_msg}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": err_msg,
+                "traceId": trace_id_ctx.get()
+            }
+        )
 
     # API 라우터 등록
     app.include_router(api_router, prefix="/api", tags=["API"])
