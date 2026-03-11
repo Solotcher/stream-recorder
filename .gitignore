@@ -31,6 +31,8 @@ tests/
 .tmp/
 .gemini/
 .agents/
+tmp_*.py
+*result.txt
 
 # 작업 기록 (개발용)
 work_log.md
