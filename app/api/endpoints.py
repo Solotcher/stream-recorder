@@ -97,7 +97,7 @@ async def update_cookie(platform: str, req: CookieRequest):
 @router.get("/cookies/status")
 async def get_cookies_status():
     """각 플랫폼별 쿠키 적용 상태를 조회합니다."""
-    platforms = ["chzzk", "twitch", "soop"]
+    platforms = ["chzzk", "twitch", "soop", "youtube"]
     status = {}
     for p in platforms:
         cookies = get_platform_cookies(p)

@@ -117,7 +117,7 @@ async function fetchCookieStatus() {
         const result = await res.json();
         if (res.ok && result.data) {
             const bar = document.getElementById('cookie_status_bar');
-            const platforms = { chzzk: '치지직', twitch: '트위치', soop: '숲' };
+            const platforms = { chzzk: '치지직', twitch: '트위치', soop: '숲', youtube: '유튜브' };
             let html = '';
             for (const [key, label] of Object.entries(platforms)) {
                 const info = result.data[key];
@@ -146,7 +146,7 @@ function switchCookieTab(platform) {
     const textarea = document.getElementById('cookie_textarea');
     textarea.value = '';
 
-    const names = { chzzk: '치지직(Chzzk)', twitch: '트위치(Twitch)', soop: '숲(SOOP)' };
+    const names = { chzzk: '치지직(Chzzk)', twitch: '트위치(Twitch)', soop: '숲(SOOP)', youtube: '유튜브(YouTube)' };
     label.innerText = `${names[platform]} 통합 쿠키 뭉치 입력 (.txt / JSON)`;
     textarea.placeholder = `${names[platform]} 쿠키(EditThisCookie 등)를 복사하여 이곳에 붙여넣으세요.`;
 }

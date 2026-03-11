@@ -56,6 +56,7 @@
                             <option value="chzzk">치지직</option>
                             <option value="soop">숲(SOOP)</option>
                             <option value="twitch">트위치</option>
+                            <option value="youtube">유튜브</option>
                         </select>
                         <input type="password" id="manual_stream_password" placeholder="비밀번호 방인 경우 입력 (선택)" style="flex: 1; min-width: 200px; padding: 0.75rem; border-radius: 6px; background: rgba(1, 4, 9, 0.8); border: 1px solid var(--glass-border); color: var(--text-primary);">
                         <button class="btn btn-primary" onclick="submitManualRecord()">🔴 지금
@@ -138,6 +139,7 @@
                     <option value="chzzk">치지직 (Chzzk)</option>
                     <option value="soop">숲 (SOOP)</option>
                     <option value="twitch">트위치 (Twitch)</option>
+                    <option value="youtube">유튜브 (YouTube)</option>
                 </select>
             </div>
             <div class="input-group">
@@ -192,6 +194,7 @@
                     <button class="btn btn-sm cookie-sub-tab active" onclick="switchCookieTab('chzzk')">치지직 <span id="cookie_dot_chzzk" style="font-size:8px;">●</span></button>
                     <button class="btn btn-sm cookie-sub-tab" onclick="switchCookieTab('twitch')">트위치 <span id="cookie_dot_twitch" style="font-size:8px;">●</span></button>
                     <button class="btn btn-sm cookie-sub-tab" onclick="switchCookieTab('soop')">숲(SOOP) <span id="cookie_dot_soop" style="font-size:8px;">●</span></button>
+                    <button class="btn btn-sm cookie-sub-tab" onclick="switchCookieTab('youtube')">유튜브 <span id="cookie_dot_youtube" style="font-size:8px;">●</span></button>
                 </div>
 
                 <div id="cookie_status_bar" style="padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.85em; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);">

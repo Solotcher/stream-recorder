@@ -107,8 +107,15 @@ class RecorderManager:
             logger.info(f"[{channel_name}] 녹화 프로세스 종료됨. Return Code: {returncode}")
 
             # 후처리 트리거 분기
-            # SOOP의 경우 방종 판단(scheduler) 시 일괄 병합(concat)하므로 단건 리먹싱을 생략함
-            if self.session_platform != "soop":
+            # SOOP: 방종 판단(scheduler) 시 일괄 병합(concat)하므로 단건 리먹싱 생략
+            # YouTube: yt-dlp가 직접 MP4로 녹화하므로 리먹싱 불필요
+            if self.session_platform == "youtube":
+                await send_telegram_message(f"<b>{channel_name}</b> 유튜브 녹화 완료. (.mp4)")
+                # 클라우드 자동 업로드 트리거
+                from app.services.uploader import upload_file
+                import asyncio as _asyncio
+                _asyncio.create_task(upload_file(self.output_path, channel_name))
+            elif self.session_platform != "soop":
                 await send_telegram_message(f"<b>{channel_name}</b> 녹화 종료. 후처리(Remuxing)를 시작합니다.")
                 await process_remuxing(self.output_path, channel_name)
             else:

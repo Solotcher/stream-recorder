@@ -17,11 +17,13 @@ from app.services.recorder import RecorderManager
 from app.extractors.chzzk import ChzzkExtractor
 from app.extractors.twitch import TwitchExtractor
 from app.extractors.soop import SoopExtractor
+from app.extractors.youtube import YouTubeExtractor
 
 EXTRACTOR_MAP = {
     "chzzk": ChzzkExtractor,
     "twitch": TwitchExtractor,
-    "soop": SoopExtractor
+    "soop": SoopExtractor,
+    "youtube": YouTubeExtractor
 }
 
 # 글로벌 스케줄러 인스턴스
@@ -88,8 +90,11 @@ async def trigger_recording(ch_id: str, platform: str, ch_name: str, extractor, 
     
     if platform == "soop":
         filename = f"{filename_base}_part{recorder.session_part}.webm"
+    elif platform == "youtube":
+        # 유튜브는 yt-dlp로 직접 MP4 녹화 (리멕싱 불필요)
+        filename = f"{filename_base}.mp4"
     else:
-        # 단일 파일 (트위치, 치지직) — .ts로 녹화 후 리먹싱으로 .mp4 변환
+        # 단일 파일 (트위치, 치지직) — .ts로 녹화 후 리멕싱으로 .mp4 변환
         filename = f"{filename_base}.ts"
         
     # 스트리머별 폴더 생성
@@ -98,9 +103,16 @@ async def trigger_recording(ch_id: str, platform: str, ch_name: str, extractor, 
     
     output_path = os.path.join(streamer_dir, filename)
     
-    cmd = [settings.STREAMLINK_PATH]
-    cmd.extend(extractor.get_streamlink_args())
-    cmd.extend([meta.get("stream_url", ""), resolution, "-o", output_path])
+    if platform == "youtube":
+        # 유튜브: yt-dlp 커맨드 조립
+        cmd = [settings.YTDLP_PATH]
+        cmd.extend(extractor.get_streamlink_args())
+        cmd.extend(["-o", output_path, meta.get("stream_url", "")])
+    else:
+        # 기타 플랫폼: Streamlink 커맨드 조립
+        cmd = [settings.STREAMLINK_PATH]
+        cmd.extend(extractor.get_streamlink_args())
+        cmd.extend([meta.get("stream_url", ""), resolution, "-o", output_path])
     
     # 백그라운드 태스크로 시작
     asyncio.create_task(recorder.start_record(cmd, output_path, safe_name, record_type))

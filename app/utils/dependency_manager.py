@@ -165,10 +165,63 @@ def ensure_streamlink() -> str:
     return "streamlink"
 
 
+# yt-dlp 다운로드 URL (플랫폼별)
+YTDLP_URLS = {
+    "Windows": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
+    "Linux": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
+}
+
+
+def ensure_ytdlp() -> str:
+    """
+    yt-dlp가 사용 가능한지 확인하고, 없으면 자동 다운로드합니다.
+    반환: yt-dlp 전체 경로
+    """
+    path = find_binary("yt-dlp", settings.YTDLP_PATH)
+    if path:
+        logger.info(f"✅ yt-dlp 확인됨: {path}")
+        return path
+    
+    # 다운로드 시도
+    system = platform.system()
+    url = YTDLP_URLS.get(system)
+    if not url:
+        logger.warning(f"⚠️ yt-dlp 자동 다운로드는 {system}을(를) 지원하지 않습니다. 수동으로 설치해주세요.")
+        return "yt-dlp"
+    
+    logger.info(f"🔍 yt-dlp를 찾을 수 없습니다. 자동 다운로드를 시작합니다... ({system})")
+    
+    os.makedirs(BIN_DIR, exist_ok=True)
+    
+    if system == "Windows":
+        target_path = os.path.join(BIN_DIR, "yt-dlp.exe")
+    else:
+        target_path = os.path.join(BIN_DIR, "yt-dlp")
+    
+    try:
+        _download_with_progress(url, target_path)
+        
+        # Linux에서 실행 권한 부여
+        if system == "Linux":
+            os.chmod(target_path, 0o755)
+        
+        if os.path.isfile(target_path):
+            logger.info(f"🎉 yt-dlp 자동 설치 완료: {target_path}")
+            return target_path
+        else:
+            logger.error("❌ yt-dlp 다운로드 후 바이너리를 찾을 수 없습니다.")
+    except Exception as e:
+        logger.error(f"❌ yt-dlp 다운로드 실패: {e}")
+        if os.path.exists(target_path):
+            os.remove(target_path)
+    
+    return "yt-dlp"
+
+
 def check_all_dependencies():
     """
     서버 시작 시 호출되는 전체 의존성 검사 함수.
-    FFmpeg가 없으면 자동 다운로드하고, 찾은 경로를 settings에 반영합니다.
+    FFmpeg, Streamlink, yt-dlp가 없으면 자동 다운로드하고, 찾은 경로를 settings에 반영합니다.
     """
     logger.info("🔧 외부 의존성 검사를 시작합니다...")
     
@@ -179,5 +232,9 @@ def check_all_dependencies():
     # Streamlink
     streamlink_path = ensure_streamlink()
     settings.STREAMLINK_PATH = streamlink_path
+    
+    # yt-dlp (유튜브 녹화용)
+    ytdlp_path = ensure_ytdlp()
+    settings.YTDLP_PATH = ytdlp_path
     
     logger.info("🔧 의존성 검사 완료.")

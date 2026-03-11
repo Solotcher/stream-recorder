@@ -57,16 +57,28 @@ async def process_remuxing(input_path: str, channel_name: str):
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.PIPE
         )
         
         def _wait_proc():
-            return proc.wait()
+            _, stderr_output = proc.communicate()
+            return proc.returncode, stderr_output
             
-        returncode = await asyncio.to_thread(_wait_proc)
+        returncode, stderr_bytes = await asyncio.to_thread(_wait_proc)
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace")[-2000:] if stderr_bytes else ""
 
         if returncode == 0:
-            logger.info(f"[{channel_name}] Remuxing 성공 (.mp4 생성). 원본 .ts 파일을 삭제합니다.")
+            # 무결성 검증: 출력 파일이 최소 1KB 이상인지 확인
+            output_size = os.path.getsize(mp4_path) if os.path.exists(mp4_path) else 0
+            if output_size < 1024:
+                logger.error(f"[{channel_name}] Remuxing 결과 파일이 비정상적으로 작습니다 ({output_size}B). 원본 .ts 파일을 보존합니다.")
+                await send_error_alert(channel_name, "FFmpeg Remuxing 무결성 검증 실패", f"출력 파일 크기: {output_size}B")
+                # 손상된 mp4 제거, 원본 ts 보존
+                if os.path.exists(mp4_path):
+                    os.remove(mp4_path)
+                return
+            
+            logger.info(f"[{channel_name}] Remuxing 성공 (.mp4 생성, {output_size // (1024*1024)}MB). 원본 .ts 파일을 삭제합니다.")
             os.remove(input_path)
             await send_telegram_message(f"<b>{channel_name}</b> 파일 후처리(Remuxing) 완료. (.mp4)")
             
@@ -74,7 +86,9 @@ async def process_remuxing(input_path: str, channel_name: str):
             from app.services.uploader import upload_file
             asyncio.create_task(upload_file(mp4_path, channel_name))
         else:
-            logger.error(f"[{channel_name}] Remuxing 실패 (Return Code: {returncode})")
+            logger.error(f"[{channel_name}] Remuxing 실패 (Return Code: {returncode}). 원본 .ts 파일을 보존합니다.")
+            if stderr_text:
+                logger.error(f"[{channel_name}] FFmpeg stderr: {stderr_text}")
             await send_error_alert(channel_name, "FFmpeg Remuxing (.ts → .mp4)", f"Return Code: {returncode}")
             
     except Exception as e:
@@ -151,22 +165,33 @@ async def process_soop_concat(chunks_dir: str, base_filename: str, channel_name:
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.PIPE
         )
         
         def _wait_proc():
-            return proc.wait()
+            _, stderr_output = proc.communicate()
+            return proc.returncode, stderr_output
             
-        returncode = await asyncio.to_thread(_wait_proc)
+        returncode, stderr_bytes = await asyncio.to_thread(_wait_proc)
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace")[-2000:] if stderr_bytes else ""
         
         if returncode == 0:
+            # 무결성 검증: 출력 파일이 최소 1KB 이상인지 확인
+            output_size = os.path.getsize(final_output) if os.path.exists(final_output) else 0
+            if output_size < 1024:
+                logger.error(f"[{channel_name}] 병합 결과 파일이 비정상적으로 작습니다 ({output_size}B). 원본 청크 파일들을 보존합니다.")
+                await send_error_alert(channel_name, "SOOP Concat 무결성 검증 실패", f"출력 파일 크기: {output_size}B")
+                if os.path.exists(final_output):
+                    os.remove(final_output)
+                return
+            
             logger.info(f"[{channel_name}] 병합(Concat) 성공. 원본 및 리스트 파일 삭제")
             for filepath in parts:
                 os.remove(filepath)
             os.remove(list_txt_path)
             
             # 최종 알림 전송
-            file_size_mb = round(os.path.getsize(final_output) / (1024 * 1024), 1)
+            file_size_mb = round(output_size / (1024 * 1024), 1)
             msg = f"✅ <b>{channel_name}</b> 방송 녹화/병합이 완료되었습니다.\n- 총 {len(parts)}개 조각 병합됨\n- 파일 크기: {file_size_mb} MB"
             await send_telegram_message(msg)
             
@@ -174,7 +199,9 @@ async def process_soop_concat(chunks_dir: str, base_filename: str, channel_name:
             from app.services.uploader import upload_file
             asyncio.create_task(upload_file(final_output, channel_name))
         else:
-            logger.error(f"[{channel_name}] 병합 실패 (Return Code: {returncode})")
+            logger.error(f"[{channel_name}] 병합 실패 (Return Code: {returncode}). 원본 청크 파일들을 보존합니다.")
+            if stderr_text:
+                logger.error(f"[{channel_name}] FFmpeg stderr: {stderr_text}")
             await send_telegram_message(f"❌ <b>{channel_name}</b> 병합 중 오류가 발생했습니다. 원본 청크 파일들을 유지합니다.")
             await send_error_alert(channel_name, "SOOP FFmpeg Concat (다중 병합)", f"Return Code: {returncode}")
             
