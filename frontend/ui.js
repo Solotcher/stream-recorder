@@ -32,17 +32,17 @@ export function showToast(message, type = 'success') {
 
 // View 전환 (SPA 라우팅)
 export function switchView(viewId, onSwitchCb = null) {
+    // 모든 뷰와 메뉴 아이템의 active 클래스 제거
     document.querySelectorAll('.view-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
+    // 선택된 뷰 활성화
     const view = document.getElementById(`view-${viewId}`);
     if (view) view.classList.add('active');
 
-    // 네비게이션 아이템 활성화 설정
-    const navItems = document.querySelectorAll('.nav-item');
-    if (viewId === 'active' && navItems[0]) navItems[0].classList.add('active');
-    if (viewId === 'manual' && navItems[1]) navItems[1].classList.add('active');
-    if (viewId === 'scheduled' && navItems[2]) navItems[2].classList.add('active');
+    // 선택된 네비게이션 아이템 활성화 (속성 기반으로 변경하여 더 견고하게 만듦)
+    const activeNavItem = document.querySelector(`.nav-item[data-view="${viewId}"]`);
+    if (activeNavItem) activeNavItem.classList.add('active');
 
     if (onSwitchCb) onSwitchCb(viewId);
 }
@@ -51,11 +51,16 @@ export function switchView(viewId, onSwitchCb = null) {
 export function openModal(id) { document.getElementById(id).classList.add('active'); }
 export function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-export function switchMainTab(tabName) {
-    const activeTabObj = event ? event.target : null;
-    document.querySelectorAll('.config-main-tab').forEach(b => b.classList.remove('active'));
-    if (activeTabObj) activeTabObj.classList.add('active');
+export function switchMainTab(tabName, event = null) {
+    // 1. 클릭된 버튼 하이라이트 (event가 있으면 해당 타겟 사용)
+    const activeTabObj = event?.currentTarget || event?.target || null;
+    
+    if (activeTabObj) {
+        document.querySelectorAll('.config-main-tab').forEach(b => b.classList.remove('active'));
+        activeTabObj.classList.add('active');
+    }
 
+    // 2. 컨텐츠 전환
     document.querySelectorAll('.config-tab-content').forEach(c => c.style.display = 'none');
     const content = document.getElementById(`tab-content-${tabName}`);
     if (content) content.style.display = 'block';

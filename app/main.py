@@ -55,12 +55,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
-    # CORS: 로컬호스트만 허용 (운영 시 실제 도메인 추가)
-    allowed_origins = [
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://0.0.0.0:8000"
-    ]
+    # CORS: 모든 오리진 허용 (내부 IP 및 다양한 환경 지원)
+    allowed_origins = ["*"]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
