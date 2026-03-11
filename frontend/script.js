@@ -20,7 +20,7 @@ import { initWebSocket } from './ws.js';
 // --- 동적 이벤트 리스너 등록 (신규 Event Delegation 방식) ---
 function bindEvents() {
     console.log('[App] 전역 이벤트 위임 리스너 바인딩 중...');
-    
+
     document.addEventListener('click', (e) => {
         // 1. 사이드바 네비게이션
         const navItem = e.target.closest('.nav-item[data-view]');
@@ -34,7 +34,7 @@ function bindEvents() {
 
         // 3. 설정 탭 전환
         const mainTab = e.target.closest('.config-main-tab[data-tab]');
-        if (mainTab) return switchMainTab(mainTab.dataset.tab, {currentTarget: mainTab});
+        if (mainTab) return switchMainTab(mainTab.dataset.tab, { currentTarget: mainTab });
 
         const cookieTab = e.target.closest('.cookie-sub-tab[data-cookie-platform]');
         if (cookieTab) return switchCookieTab(cookieTab.dataset.cookiePlatform);
@@ -62,16 +62,16 @@ function bindEvents() {
 const initApp = async () => {
     console.log('[App] 초기화 시작...');
     bindEvents();
-    
+
     try {
         await fetchChannels();
     } catch (e) {
         console.error('[App] 초기 데이터 로드 실패:', e);
     }
 
-    setInterval(fetchChannels, CONFIG.POLLING_INTERVAL_CHANNELS); 
+    setInterval(fetchChannels, CONFIG.POLLING_INTERVAL_CHANNELS);
     setInterval(fetchActiveJobs, CONFIG.POLLING_INTERVAL_JOBS);
-    
+
     try {
         initWebSocket();
     } catch (e) {

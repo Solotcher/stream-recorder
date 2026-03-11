@@ -1,5 +1,5 @@
 import { CONFIG, currentCookiePlatform } from './config.js';
-import { showToast, escapeHtml } from './ui.js';
+import { showToast, escapeHtml, switchView, closeModal, openModal } from './ui.js';
 
 /**
  * URL 정규식 기반 채널 ID 자동 파싱 유틸리티
@@ -143,7 +143,7 @@ export async function submitManualRecord() {
         if (startRes.ok) {
             showToast('녹화 시작을 요청했습니다. 현황을 확인하세요.', 'success');
             document.getElementById('manual_url_input').value = '';
-            window.switchView('active');
+            switchView('active');
         } else {
             let errorMsg = '녹화 명령 실패. 오프라인이거나 이미 녹화 중일 수 있습니다.';
             try {
@@ -173,7 +173,7 @@ export async function submitChannel() {
             body: JSON.stringify({ platform, id: ch_id, name: name || ch_id, resolution })
         });
         if (res.ok) {
-            window.closeAddModal();
+            closeModal('addModal');
             fetchChannels();
             document.getElementById('modal_channel_id').value = '';
             document.getElementById('modal_channel_name').value = '';
@@ -229,6 +229,132 @@ export async function stopChannel(channel_id) {
         }
     } catch (e) {
         showToast('서버 에러', 'error');
+    }
+}
+
+// =====================================================================
+// 환경 설정 및 쿠키 관련 함수 모음
+// =====================================================================
+
+export async function openConfigModalWithData() {
+    openModal('configModal');
+    await fetchSystemConfig();
+    await fetchCookieStatus();
+}
+
+export async function fetchSystemConfig() {
+    try {
+        const res = await fetch(`${CONFIG.API_BASE}/config`);
+        if (res.ok) {
+            const result = await res.json();
+            const data = result.data || {};
+
+            document.getElementById('sys_tg_token').value = data.TELEGRAM_BOT_TOKEN || '';
+            document.getElementById('sys_tg_chat_id').value = data.TELEGRAM_CHAT_ID || '';
+            document.getElementById('sys_output_dir').value = data.OUTPUT_DIR || '';
+            document.getElementById('sys_rclone_remote').value = data.RCLONE_REMOTE || '';
+            document.getElementById('sys_filename_pattern').value = data.FILENAME_PATTERN || '';
+        } else {
+            console.warn("시스템 설정을 불러오지 못했습니다. (API 확인 필요)");
+        }
+    } catch (e) {
+        console.error("시스템 설정 Fetch 에러:", e);
+    }
+}
+
+export async function saveSystemConfig() {
+    const payload = {
+        TELEGRAM_BOT_TOKEN: document.getElementById('sys_tg_token').value,
+        TELEGRAM_CHAT_ID: document.getElementById('sys_tg_chat_id').value,
+        OUTPUT_DIR: document.getElementById('sys_output_dir').value,
+        RCLONE_REMOTE: document.getElementById('sys_rclone_remote').value,
+        FILENAME_PATTERN: document.getElementById('sys_filename_pattern').value
+    };
+
+    try {
+        const res = await fetch(`${CONFIG.API_BASE}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            showToast('시스템 설정이 저장되었습니다.', 'success');
+            closeModal('configModal');
+        } else {
+            showToast('설정 저장 실패!', 'error');
+        }
+    } catch (e) {
+        showToast('서버 접속 에러: ' + e.message, 'error');
+    }
+}
+
+export async function fetchCookieStatus() {
+    try {
+        const res = await fetch(`${CONFIG.API_BASE}/cookies/status`);
+        if (res.ok) {
+            const result = await res.json();
+            const data = result.data || {};
+            const statusBar = document.getElementById('cookie_status_bar');
+
+            if (statusBar) {
+                let statusHtml = '';
+                const platforms = { chzzk: '치지직', twitch: '트위치', soop: '숲', youtube: '유튜브' };
+
+                for (const [plat, name] of Object.entries(platforms)) {
+                    // 서버가 {"applied": true} 형태로 주는 값을 파싱합니다.
+                    const isOk = data[plat] && data[plat].applied;
+                    statusHtml += `<span style="margin-right:12px; color:${isOk ? '#7ee787' : 'var(--text-secondary)'};">${name}: ${isOk ? '✅' : '❌'}</span>`;
+
+                    const dot = document.getElementById(`cookie_dot_${plat}`);
+                    if (dot) dot.style.color = isOk ? '#7ee787' : 'var(--text-secondary)';
+                }
+                statusBar.innerHTML = statusHtml || '쿠키 상태를 불러왔습니다.';
+            }
+        }
+    } catch (e) {
+        console.error("쿠키 상태 Fetch 에러:", e);
+    }
+}
+
+export async function saveCookieParser() {
+    const cookieText = document.getElementById('cookie_textarea').value;
+
+    if (!cookieText.trim()) {
+        return showToast('쿠키 내용을 입력하세요.', 'error');
+    }
+
+    const activeTab = document.querySelector('.cookie-sub-tab.active');
+    const platform = activeTab ? activeTab.dataset.cookiePlatform : 'chzzk';
+
+    try {
+        const res = await fetch(`${CONFIG.API_BASE}/cookies/${platform}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw_cookie: cookieText })
+        });
+
+        if (res.ok) {
+            showToast(`${platform} 쿠키가 성공적으로 저장되었습니다!`, 'success');
+            document.getElementById('cookie_textarea').value = '';
+            fetchCookieStatus();
+        } else {
+            showToast('쿠키 저장 실패! 형식을 확인하세요.', 'error');
+        }
+    } catch (e) {
+        showToast('서버 접속 에러: ' + e.message, 'error');
+    }
+}
+
+export async function switchCookieTab(tabName) {
+    document.querySelectorAll('.cookie-sub-tab').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`.cookie-sub-tab[data-cookie-platform="${tabName}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const label = document.getElementById('cookie_label');
+    if (label) {
+        const platformNames = { 'chzzk': '치지직(Chzzk)', 'twitch': '트위치(Twitch)', 'soop': '숲(SOOP)', 'youtube': '유튜브(YouTube)' };
+        label.innerText = `${platformNames[tabName] || tabName} 통합 쿠키 뭉치 입력`;
     }
 }
 
