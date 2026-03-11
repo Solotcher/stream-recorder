@@ -9,6 +9,7 @@ from app.core.logger import logger
 from app.utils.telegram_bot import send_telegram_message, send_error_alert
 from app.services.merger import process_remuxing
 from app.utils.process_state import register_process, unregister_process
+from app.utils.event_bus import broadcast_event
 
 class RecorderManager:
     """
@@ -61,6 +62,7 @@ class RecorderManager:
         self.session_platform = ""
         self.session_channel_name = ""
         self.session_title = ""
+        self.session_category = ""
         self.session_record_type = "scheduled"
 
     async def start_record(self, cmd: list, output_path: str, channel_name: str, record_type: str = "scheduled"):
@@ -75,6 +77,12 @@ class RecorderManager:
 
         logger.info(f"[{channel_name}] 녹화 프로세스 시작: {' '.join(shlex.quote(x) for x in cmd)}")
         await send_telegram_message(f"<b>{channel_name}</b> 채널 라이브 감지. 녹화를 시작합니다.")
+        await broadcast_event("recording_started", {
+            "id": self.channel_id,
+            "platform": self.session_platform,
+            "name": channel_name,
+            "record_type": record_type
+        })
 
         try:
             import subprocess
@@ -133,6 +141,10 @@ class RecorderManager:
             self.is_recording = False
             self.process = None
             unregister_process(self.channel_id)
+            await broadcast_event("recording_stopped", {
+                "id": self.channel_id,
+                "name": channel_name
+            })
 
     async def stop_record(self, channel_name: str):
         """ 실행 중인 FFmpeg 프로세스 강제 종료 """

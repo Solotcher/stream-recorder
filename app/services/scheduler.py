@@ -61,6 +61,7 @@ async def trigger_recording(ch_id: str, platform: str, ch_name: str, extractor, 
         recorder.session_platform = platform
         recorder.session_channel_name = ch_name
         recorder.session_title = meta.get("title", "")
+        recorder.session_category = meta.get("category", "")
     else:
         recorder.session_part += 1
 

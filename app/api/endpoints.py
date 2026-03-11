@@ -5,6 +5,7 @@ from app.core.logger import logger
 from app.utils.channel_db import get_all_channels, add_channel, delete_channel, get_channel, update_channel
 from app.utils.cookie_manager import parse_raw_cookie, update_platform_cookies, get_platform_cookies
 from app.services.recorder import RecorderManager
+from app.utils.event_bus import broadcast_event
 
 router = APIRouter()
 
@@ -76,12 +77,14 @@ async def register_channel(request: ChannelCreateRequest):
     success = add_channel(request.dict())
     if not success:
         raise HTTPException(status_code=400, detail="Channel already exists or error occurs")
+    await broadcast_event("channel_added", {"id": request.id, "platform": request.platform, "name": request.name})
     return {"status": "success"}
 
 @router.delete("/channels/{channel_id}")
 async def remove_channel(channel_id: str):
     logger.info(f"채널 삭제 요청: {channel_id}")
     delete_channel(channel_id)
+    await broadcast_event("channel_deleted", {"id": channel_id})
     return {"status": "success"}
 
 @router.post("/cookies/{platform}")
@@ -133,6 +136,13 @@ async def update_system_config(req: ConfigRequest):
     
     updates = {k: v for k, v in req.dict().items() if v is not None}
     
+    # 마스킹된 토큰("***" 포함)이나 빈 문자열이 들어오면 업데이트 대상에서 제외
+    # → 사용자가 토큰을 변경하지 않았을 때 기존 값 보존
+    if "TELEGRAM_BOT_TOKEN" in updates:
+        token_val = updates["TELEGRAM_BOT_TOKEN"]
+        if not token_val or "***" in token_val:
+            del updates["TELEGRAM_BOT_TOKEN"]
+    
     # OUTPUT_DIR이 수정 요청에 포함되어 있다면 디렉토리 생성(존재확인) 로직 수행
     if "OUTPUT_DIR" in updates and updates["OUTPUT_DIR"]:
         os.makedirs(updates["OUTPUT_DIR"], exist_ok=True)
@@ -148,12 +158,17 @@ async def get_active_records():
     active_jobs = []
     for ch_id, recorder in RecorderManager._instances.items():
         if recorder.is_recording:
+            started_at = None
+            if recorder.session_started_at:
+                started_at = recorder.session_started_at.isoformat()
             active_jobs.append({
                 "id": ch_id,
                 "platform": getattr(recorder, "session_platform", "unknown"),
                 "name": getattr(recorder, "session_channel_name", ch_id),
                 "title": getattr(recorder, "session_title", ""),
+                "category": getattr(recorder, "session_category", ""),
                 "record_type": getattr(recorder, "session_record_type", "scheduled"),
+                "started_at": started_at,
                 "is_recording": True
             })
     return {"status": "success", "data": active_jobs}
@@ -189,6 +204,7 @@ async def start_manual_record(request: ManualRecordRequest):
             ch_name = meta.get("channel_name", channel_id)
                 
             await trigger_recording(channel_id, platform, ch_name, extractor, recorder, meta, record_type="manual", resolution=request.resolution)
+            await broadcast_event("recording_started", {"id": channel_id, "platform": platform, "name": ch_name, "record_type": "manual"})
             return {"status": "success", "message": "수동 녹화 시작됨"}
         else:
             raise HTTPException(status_code=400, detail="방송이 오프라인 상태이거나 정보를 가져올 수 없습니다.")
@@ -240,4 +256,5 @@ async def stop_recording_manual(channel_id: str):
     recorder = RecorderManager.get_instance(channel_id)
     if recorder.is_recording:
         await recorder.stop_record("사용자 강제 종료")
+        await broadcast_event("recording_stopped", {"id": channel_id})
     return {"status": "success"}

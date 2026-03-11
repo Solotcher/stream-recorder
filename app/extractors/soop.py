@@ -47,6 +47,7 @@ class SoopExtractor(BaseExtractor):
                         return {
                             "title": channel.get("TITLE", "제목 없음"),
                             "channel_name": channel.get("BJNICK", self.channel_id),
+                            "category": channel.get("CATE", ""),
                             "status": "OPEN", 
                             "stream_url": f"https://play.sooplive.co.kr/{self.channel_id}"
                         }

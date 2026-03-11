@@ -112,10 +112,13 @@ class YouTubeExtractor(BaseExtractor):
 
         is_live = meta.get("is_live", False)
         channel_name = meta.get("channel", meta.get("uploader", self.channel_id))
+        categories = meta.get("categories", [])
+        category = categories[0] if categories else ""
 
         return {
             "title": meta.get("title", "제목 없음"),
             "channel_name": channel_name,
+            "category": category,
             "status": "OPEN" if is_live else "CLOSE",
             "thumbnail": meta.get("thumbnail", ""),
             "stream_url": meta.get("webpage_url", url),

@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -75,6 +75,21 @@ def create_app() -> FastAPI:
 
     # API 라우터 등록
     app.include_router(api_router, prefix="/api", tags=["API"])
+
+    # WebSocket 실시간 이벤트 엔드포인트
+    from app.utils.event_bus import ws_manager
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        await ws_manager.connect(websocket)
+        try:
+            while True:
+                # 클라이언트로부터의 메시지 대기 (keep-alive)
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            ws_manager.disconnect(websocket)
+        except Exception:
+            ws_manager.disconnect(websocket)
 
     # 프론트엔드 정적 디렉토리 마운트
     frontend_dir = os.path.join(settings.BASE_DIR, "frontend")

@@ -27,6 +27,9 @@ class TwitchExtractor(BaseExtractor):
                         type
                         viewersCount
                         createdAt
+                        game {
+                            name
+                        }
                     }
                 }
             }
@@ -45,9 +48,11 @@ class TwitchExtractor(BaseExtractor):
                             return {"status": "CLOSE"}
                             
                         stream_info = user_data["stream"]
+                        game_data = stream_info.get("game") or {}
                         return {
                             "title": stream_info.get("title", "제목 없음"),
                             "channel_name": self.channel_id,
+                            "category": game_data.get("name", ""),
                             "status": "OPEN",
                             "start_time": stream_info.get("createdAt"),
                             "stream_url": f"https://twitch.tv/{self.channel_id}"

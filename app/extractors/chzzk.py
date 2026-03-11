@@ -28,6 +28,7 @@ class ChzzkExtractor(BaseExtractor):
                         status = content.get("status", "CLOSE")
                         title = content.get("liveTitle", "제목 없음")
                         thumbnail = content.get("liveImageUrl", "")
+                        category = content.get("liveCategoryValue", "")
                         
                         # live-status API에는 채널명이 없으므로 별도 Channel API로 실제 닉네임 조회
                         channel_name = self.channel_id
@@ -40,6 +41,7 @@ class ChzzkExtractor(BaseExtractor):
                         return {
                             "title": title,
                             "channel_name": channel_name,
+                            "category": category,
                             "status": status, 
                             "thumbnail": thumbnail,
                             "stream_url": f"https://chzzk.naver.com/live/{self.channel_id}"

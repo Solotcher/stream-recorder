@@ -35,7 +35,9 @@ function showToast(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     switchView('active'); // 기본 뷰
     fetchChannels();
-    setInterval(fetchChannels, 10000); // 10초마다 갱신
+    setInterval(fetchChannels, 10000); // 10초마다 갱신 (WebSocket 폴백)
+    setInterval(fetchActiveJobs, 60000); // 1분마다 녹화 경과 시간 갱신
+    initWebSocket(); // 실시간 업데이트 WebSocket 연결
 });
 
 // View 전환 (SPA 라우팅)
@@ -162,24 +164,37 @@ async function fetchActiveJobs() {
         const activeChannels = data.data;
 
         if (activeChannels.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 20px; color:var(--text-secondary);">진행 중인 녹화 작업이 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color:var(--text-secondary);">진행 중인 녹화 작업이 없습니다.</td></tr>`;
             return;
         }
 
         activeChannels.forEach(ch => {
             const tr = document.createElement('tr');
+
+            // 녹화 경과 시간 계산
+            let elapsed = '';
+            if (ch.started_at) {
+                const startTime = new Date(ch.started_at);
+                const now = new Date();
+                const diffMs = now - startTime;
+                const hours = Math.floor(diffMs / 3600000);
+                const mins = Math.floor((diffMs % 3600000) / 60000);
+                elapsed = hours > 0 ? `${hours}시간 ${mins}분` : `${mins}분`;
+            }
+
             const badgeLabel = ch.record_type === 'manual' ?
                 '<span class="status-badge" style="background-color: var(--accent); color: black;">수동</span>' :
                 '<span class="status-badge" style="background-color: #238636; color: white;">예약</span>';
 
-            const titleDisplay = ch.title ? `<span style="color:var(--text-secondary); font-size: 0.9em; margin-left:8px;">${escapeHtml(ch.title)}</span>` : '';
-
             tr.innerHTML = `
-                <td><strong>${escapeHtml(ch.platform).toUpperCase()}</strong> ${badgeLabel} ${escapeHtml(ch.name)} ${titleDisplay}</td>
-                <td><small style="color:var(--text-secondary)">다운로드 폴더 저장 중...</small></td>
-                <td><span style="color:#7ee787;">녹화 중 🔴</span></td>
+                <td><strong>${escapeHtml(ch.platform).toUpperCase()}</strong> ${badgeLabel}</td>
+                <td><strong>${escapeHtml(ch.name)}</strong></td>
+                <td>${escapeHtml(ch.title) || '<span style="color:var(--text-secondary)">제목 없음</span>'}</td>
+                <td>${escapeHtml(ch.category) || '<span style="color:var(--text-secondary)">-</span>'}</td>
                 <td>
-                    <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5);" onclick="stopChannel('${escapeHtml(ch.id)}')">■ 강제 중지</button>
+                    <span style="color:#7ee787;">녹화 중 🔴</span>
+                    <span style="color:var(--text-secondary); font-size:0.85em; margin-left:6px;">${elapsed}</span>
+                    <button class="btn" style="color:var(--danger); border-color:rgba(218,54,51,0.5); margin-left:8px; padding:3px 8px; font-size:0.8em;" onclick="stopChannel('${escapeHtml(ch.id)}')">■ 중지</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -199,10 +214,9 @@ async function fetchChannels() {
         data.data.forEach(ch => {
             const tr = document.createElement('tr');
 
-            // 상태 뱃지 판별 로직 (실제로는 백엔드에서 내려주는 status 활용)
+            // 녹화상태 배지
             let badgeClass = 'status-offline';
-            let statusText = ch.status === 'OPEN' ? '방송 중' : '오프라인';
-            if (ch.status === 'OPEN') badgeClass = 'status-live';
+            let statusText = '대기';
             if (ch.is_recording) {
                 badgeClass = 'status-recording';
                 statusText = '녹화 중 🔴';
@@ -224,7 +238,6 @@ async function fetchChannels() {
                 <td><strong>${escapeHtml(ch.platform).toUpperCase()}</strong></td>
                 <td><strong>${escapeHtml(ch.name)}</strong><br><small style="color:var(--text-secondary)">${escapeHtml(ch.id)}</small></td>
                 <td><span class="status-badge ${badgeClass}">${statusText}</span></td>
-                <td>${ch.is_recording ? '저장 중' : '대기'}</td>
                 <td>${actionButtons}</td>
             `;
             tbody.appendChild(tr);
@@ -406,12 +419,15 @@ async function saveSystemConfig() {
     const rclone_remote = document.getElementById('sys_rclone_remote') ? document.getElementById('sys_rclone_remote').value.trim() : '';
     const filename_pattern = document.getElementById('sys_filename_pattern') ? document.getElementById('sys_filename_pattern').value.trim() : '';
 
+    // 마스킹된 토큰(***포함)은 서버에 전송하지 않음 (기존 값 보존)
+    const safeToken = (token && !token.includes('***')) ? token : null;
+
     try {
         const res = await fetch(`${API_BASE}/config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                TELEGRAM_BOT_TOKEN: token,
+                TELEGRAM_BOT_TOKEN: safeToken,
                 TELEGRAM_CHAT_ID: chat_id,
                 OUTPUT_DIR: output_dir,
                 RCLONE_REMOTE: rclone_remote,
@@ -426,5 +442,62 @@ async function saveSystemConfig() {
         }
     } catch (e) {
         showToast('서버 에러', 'error');
+    }
+}
+
+// ---------------------------
+// WebSocket 실시간 업데이트
+// ---------------------------
+let ws = null;
+let wsReconnectDelay = 1000; // 초기 재연결 딜레이 (1초)
+const WS_MAX_RECONNECT_DELAY = 30000; // 최대 재연결 딜레이 (30초)
+
+function initWebSocket() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${location.host}/ws`;
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('[WS] 실시간 연결 수립됨');
+        wsReconnectDelay = 1000; // 연결 성공 시 딜레이 초기화
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data);
+            handleWsEvent(msg.event, msg.data);
+        } catch (e) {
+            console.error('[WS] 메시지 파싱 실패:', e);
+        }
+    };
+
+    ws.onclose = () => {
+        console.log(`[WS] 연결 해제됨. ${wsReconnectDelay / 1000}초 후 재연결 시도...`);
+        setTimeout(() => {
+            wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY);
+            initWebSocket();
+        }, wsReconnectDelay);
+    };
+
+    ws.onerror = (err) => {
+        console.error('[WS] 에러 발생:', err);
+        ws.close();
+    };
+}
+
+function handleWsEvent(eventType, data) {
+    switch (eventType) {
+        case 'recording_started':
+        case 'recording_stopped':
+            fetchActiveJobs();
+            fetchChannels();
+            break;
+        case 'channel_added':
+        case 'channel_deleted':
+            fetchChannels();
+            break;
+        default:
+            console.log('[WS] 알 수 없는 이벤트:', eventType);
     }
 }
