@@ -234,9 +234,21 @@ async function fetchChannels() {
                 `;
             }
 
+            // 해상도 UI 표시 포맷팅
+            const rawResolution = ch.resolution || 'best';
+            let displayResolution = rawResolution;
+            if (rawResolution === 'best') {
+                displayResolution = '최고 화질';
+            } else if (rawResolution === 'worst') {
+                displayResolution = '최저 화질';
+            } else {
+                displayResolution = rawResolution.toUpperCase();
+            }
+
             tr.innerHTML = `
                 <td><strong>${escapeHtml(ch.platform).toUpperCase()}</strong></td>
                 <td><strong>${escapeHtml(ch.name)}</strong><br><small style="color:var(--text-secondary)">${escapeHtml(ch.id)}</small></td>
+                <td><span style="color:var(--accent); font-weight:500;">${escapeHtml(displayResolution)}</span></td>
                 <td><span class="status-badge ${badgeClass}">${statusText}</span></td>
                 <td>${actionButtons}</td>
             `;

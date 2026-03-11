@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.utils.channel_db import get_all_channels
 from app.utils.cookie_manager import get_platform_cookies
 from app.utils.telegram_bot import send_error_alert
+from app.utils.stream_quality import resolve_best_quality, format_quality_display
 from app.services.recorder import RecorderManager
 
 # Extractors
@@ -75,8 +76,22 @@ async def trigger_recording(ch_id: str, platform: str, ch_name: str, extractor, 
     
     # FILENAME_PATTERN을 사용하여 파일명 생성
     pattern = settings.FILENAME_PATTERN
-    # 화질 표기: 1080p60 → 1080P60, best → Best
-    display_quality = resolution.upper() if resolution != "best" else "Best"
+    # best일 때 실제 해상도 조회 시도 (녹화 시작 전에 비동기로 조회)
+    actual_resolution = resolution
+    if resolution == "best":
+        try:
+            actual_resolution = await resolve_best_quality(
+                meta.get("stream_url", ""),
+                extractor.get_streamlink_args(),
+                platform=platform
+            )
+            logger.info(f"[{ch_name}] best → 실제 해상도 조회 결과: {actual_resolution}")
+        except Exception as e:
+            logger.warning(f"[{ch_name}] 실제 해상도 조회 실패, 폴백 적용: {e}")
+            actual_resolution = "best"
+    
+    # 화질 표기: 1080p60 → 1080P60, best → 최고화질
+    display_quality = format_quality_display(actual_resolution)
     filename_base = pattern.format(
         date=date_str,
         streamer=safe_name,
