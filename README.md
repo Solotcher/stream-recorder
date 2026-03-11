@@ -110,6 +110,7 @@ python -m pytest tests/test_api.py -v
 
 **사용된 AI 모델:**
 - **Claude Opus 4.6** (Anthropic) — 핵심 아키텍처 설계, 백엔드/프론트엔드 전체 구현, 버그 수정, 리팩토링
+- **Gemini 3.1 Pro(High)** (Google) — 전반적인 시스템 고도화(예외 처리, 모듈화, Lock 적용), TestSprite 단위 테스트 환경 구축, 코드 안정성 개선 및 리팩토링 (Phase 1~5)
 
 > [!NOTE]
 > 코드 작성, 디버깅, 기능 추가, 테스트, 문서화까지 모든 개발 과정이 AI를 통해 수행되었습니다.
